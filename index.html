@@ -1,0 +1,3861 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <title>LDA.ipynb_ - LDA with GENSIM - YOEL 23-046</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { 
+            font-family: Arial, Helvetica, sans-serif; 
+            background: #f6f8fa; 
+            color: #222;
+            margin: 0; 
+            padding: 0; 
+        }
+        .container {
+            max-width: 1150px; 
+            margin: 0 auto;
+            background: #fff;
+            padding: 2rem 2.5rem 3rem 2.5rem;
+            box-shadow: 0 3px 15px #0002;
+        }
+        .profile {
+            display: flex;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+        .profile img {
+            border-radius: 50%;
+            width: 88px;
+            height: 88px;
+            object-fit: cover;
+            margin-right: 1.3rem;
+            border: 3px solid #ececec;
+        }
+        .profile-desc {
+            font-size: 1.11rem;
+        }
+        .profile-desc h2 {
+            margin: 0 0 0.2em 0;
+            font-size: 1.3rem;
+        }
+        h1 {
+            margin-top: 0.5em;
+            font-size: 2.15rem;
+            color: #3847e4;
+            border-bottom: 2px solid #ebeefc;
+            padding-bottom: 0.3em;
+        }
+        section {
+            margin-bottom: 2.5rem;
+        }
+        pre {
+            background: #f9fafb;
+            border: 1px solid #e1e4e8;
+            border-radius: 5px;
+            padding: 1em;
+            font-size: 1em;
+            overflow-x: auto;
+            margin: 1em 0;
+        }
+        .external-links {
+            background: #f3f6fc;
+            padding: 1em;
+            border-radius: 6px;
+            margin-bottom: 1.5em;
+            border-left: 5px solid #5c7efa;
+        }
+        .external-links ul {
+            margin: 0.2em 0 0.5em 1.15em;
+        }
+        .external-links p, .external-links ul {
+            color: #454545;
+        }
+        .focus-link {
+            font-size: 1.08em;
+            font-weight: 500;
+            color: #1153bf;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="profile">
+            <img src="https://avatars.githubusercontent.com/u/140461858?s=400&v=4" alt="Profil Yoel">
+            <div class="profile-desc">
+                <h2><b>LDA with GENSIM - Analisis Topik Berita</b></h2>
+                <p><b>Nama: YOEL</b><br><b>NIM: 23-046</b></p>
+            </div>
+        </div>
+        <h1><b>LDA.ipynb_ (LDA with GENSIM)</b></h1>
+        <div class="external-links">
+            <p>
+                Link Notebook Kode Lengkap, Visualisasi Interaktif, dan Referensi:
+            </p>
+            <ul>
+                <li>
+                    <span class="focus-link">
+                        <a href="https://colab.research.google.com/drive/1FFb9-ym3gblY8La5COCECwaEWF2KdVcY?usp=sharing" target="_blank">LDA.ipynb - Google Colab (Kode Python Lengkap, LDA GENSIM, Analisis Bahasa Indonesia)</a>
+                    </span>
+                </li>
+                <li>
+                    <a href="https://ameliaputril.github.io/PPW/LDA.html" target="_blank">Contoh Visualisasi Hasil LDA (Github Pages)</a>
+                </li>
+            </ul>
+        </div>
+
+        <!-- LOAD DATASET -->
+        <section>
+            <h2>1. Load Dataset (cnn_berita_preprocessed_full.csv)</h2>
+            <pre>
+[ ]
+import pandas as pd
+
+data = pd.read_csv('cnn_berita_preprocessed_full.csv', on_bad_lines='skip')
+
+data.head()
+            </pre>
+            <pre>
+[ ]
+data = pd.read_csv('cnn_berita_preprocessed_full.csv', sep=';', encoding='utf-8-sig', on_bad_lines='skip')
+
+# Gunakan kolom hasil stemming sebagai sumber dokumen
+data_text = data.loc[:, ['ISI_STEMMED']].copy()
+data_text['index'] = data_text.index
+
+# Tetapkan DataFrame ke variabel 'documents'
+documents = data_text
+
+# Tampilkan semua baris dokumen
+print(documents)
+            </pre>
+            <em>Contoh tampilan dokumen hasil preprocess (ISI_STEMMED):</em>
+            <pre>
+       ISI_STEMMED                                             index
+0     jakarta cnn indonesia presiden prabowo subiant...      0
+1     jakarta cnn indonesia menteri ketenagakerjaan ...      1
+2     jakarta cnn indonesia menteri ketenagakerjaan ...      2
+...
+699   jakarta cnn indonesia bioskop trans tv malam m...    699
+
+[700 rows x 2 columns]
+            </pre>
+        </section>
+        
+        <!-- PREPROCESSING -->
+        <section>
+            <h2>2. Preprocessing Teks</h2>
+            <pre>
+[ ]
+pip install gensim
+            </pre>
+            <pre>
+[ ]
+import gensim
+from gensim.utils import simple_preprocess
+from nltk.corpus import stopwords
+from nltk.stem.porter import *
+import numpy as np
+            </pre>
+            <pre>
+[ ]
+import nltk
+nltk.download('wordnet')
+# [nltk_data] Downloading package wordnet to /root/nltk_data...
+# True
+            </pre>
+            <pre>
+[ ]
+# --- Cell 2: Fungsi Preprocessing (Lemmatize & Filter) ---
+import gensim
+from nltk.stem import WordNetLemmatizer
+from nltk.corpus import stopwords
+import nltk
+
+# Unduh stopwords dan wordnet NLTK (hanya perlu sekali)
+nltk.download('stopwords')
+nltk.download('wordnet')
+
+stemmer = WordNetLemmatizer()
+stop_words = stopwords.words('english')  # Jika butuh stopwords Bahasa Indonesia bisa custom
+
+def lemmatize_stemming(text):
+    return stemmer.lemmatize(text, pos='v')
+
+def preprocess(text):
+    result = []
+    for token in gensim.utils.simple_preprocess(str(text)):
+        if token not in stop_words and len(token) > 3:
+            result.append(lemmatize_stemming(token))
+    return result
+# [nltk_data] Downloading package stopwords to /root/nltk_data...
+# [nltk_data] Downloading package wordnet to /root/nltk_data...
+            </pre>
+            <pre>
+[ ]
+# --- Cell 3: Terapkan preprocessing ke seluruh dokumen ---
+processed_docs = [preprocess(doc) for doc in data['ISI_STEMMED'].fillna('').values]
+
+# Tampilkan contoh 5 dokumen pertama setelah preprocessing
+for i, doc in enumerate(processed_docs[:5], 1):
+    print(f"Dokumen {i}: {doc}\n")
+# Contoh Output:
+# Dokumen 1: ['jakarta', 'indonesia', 'presiden', 'prabowo', 'subianto', 'gelar', 'rapat', 'batas', 'jumlah', 'menteri', 'wakil', 'presiden', 'gibran', 'rakabuming', 'diam', 'jalan', 'kertanegara', 'jakarta', 'selatan', 'minggu', 'menteri', 'sekretaris', 'negara', 'prasetyo', 'kata', 'rapat', 'bahas', 'sistem', 'uang', 'sistem', 'perban', 'masuk', 'bahas', 'hasil', 'atur', 'perintah', 'kait', 'masalah', 'devisa', 'hasil', 'ekspor', 'lihat', 'resmi', 'luncur', 'desa', 'ekspor', 'siap', 'jadi', 'lokomotif', 'ekspor', 'advertisement', 'scroll', 'continue', 'content', 'laku', 'mulai', 'bulan', 'maret', 'jadi', 'tadi', 'bahas', 'laku', 'evaluasi', 'jauh', 'mana', 'efektivitas', 'dampak', 'laku', 'kata', 'prasetyo', 'prasetyo', 'kata', 'hasil', 'terap', 'maksimal', 'sebut', 'prabowo', 'minta', 'jajar', 'ajar', 'kait', 'devisa', 'hasil', 'ekspor', 'pilih', 'redaksi', 'prabowo', 'copot', 'kepala', 'badan', 'pangan', 'ganti', 'amran', 'sulaiman', 'survei', 'persen', 'publik', 'nilai', 'bijak', 'zulhas', 'sejahtera', 'tani', 'beberapa', 'mungkin', 'devisa', 'optimal', 'harap', 'makanya', 'minta', 'segera', 'ajar', 'ujar', 'belum', 'presiden', 'prabowo', 'subianto', 'wajib', 'devisa', 'hasil', 'ekspor', 'parkir', 'bank', 'negeri', 'bijak', 'tuang', 'atur', 'perintah', 'nomor', 'tahun', 'prabowo', 'hasil', 'ekspor', 'maksimal', 'makmur', 'rakyat', 'prediksi', 'devisa', 'hasil', 'ekspor', 'tembus', 'miliar', 'tahun', 'bijak', 'perintah', 'tetap', 'wajib', 'tempat', 'devisa', 'hasil', 'ekspor', 'sistem', 'uang', 'indonesia', 'tingkat', 'jadi', 'persen', 'jangka', 'waktu', 'bulan', 'sejak', 'tempat', 'rekening', 'khusus', 'bank', 'bank', 'nasional', 'kata', 'prabowo', 'februari', 'lalu', 'gambas', 'video']
+
+Dokumen 2: ['jakarta', 'indonesia', 'menteri', 'ketenagakerjaan', 'menaker', 'yassierli', 'sampai', 'yakin', 'program', 'tenaga', 'kerja', 'mandiri', 'rupa', 'solusi', 'atas', 'masalah', 'tantang', 'ketenagakerjaan', 'indonesia', 'yassierli', 'ajak', 'mang', 'penting', 'sama', 'gerak', 'program', 'sebut', 'sampai', 'bekal', 'lanjut', 'angkat', 'penandatanganan', 'janji', 'kerja', 'sama', 'menteri', 'ketenagakerjaan', 'kemnaker', 'menteri', 'imigrasi', 'masyarakat', 'kemenimipas', 'badan', 'narkotika', 'nasional', 'balai', 'besar', 'luas', 'sempat', 'kerja', 'bbpkk', 'kemnaker', 'bandung', 'barat', 'jakarta', 'sabtu', 'solusi', 'bangsa', 'milik', 'semangat', 'wirausaha', 'apresiasi', 'buka', 'bengkel', 'usaha', 'jahit', 'maupun', 'usaha', 'roti', 'kata', 'yassierli', 'advertisement', 'scroll', 'continue', 'content', 'nilai', 'penandatanganan', 'kerja', 'sama', 'antarlembaga', 'sangat', 'strategis', 'pasal', 'kemnaker', 'pasti', 'program', 'jadi', 'bagi', 'ekosistem', 'besar', 'integrasi', 'latih', 'teknis', 'konseling', 'usaha', 'akses', 'pasar', 'dukung', 'biaya', 'ajak', 'seluruh', 'pihak', 'mulai', 'perintah', 'pusat', 'daerah', 'lembaga', 'didik', 'dunia', 'usaha', 'komunitas', 'lokal', 'seluruh', 'serta', 'terus', 'kuat', 'kolaborasi', 'kata', 'adapun', 'kerja', 'sama', 'rupa', 'wujud', 'nyata', 'komitmen', 'sama', 'bangun', 'ekosistem', 'ketenagakerjaan', 'inklusif', 'produktif', 'adil', 'yassierli', 'banyak', 'kelompok', 'masyarakat', 'milik', 'rentan', 'akses', 'dunia', 'kerja', 'masuk', 'warga', 'bina', 'masyarakat', 'klien', 'rehabilitasi', 'narkotika', 'siap', 'fasilitas', 'beri', 'butuh', 'dukung', 'bimbing', 'akses', 'lebih', 'luas', 'sempat', 'kerja', 'maupun', 'kewirausahaan', 'ujar', 'sempat', 'sama', 'dirjen', 'binapenta', 'kemnaker', 'darmawansyah', 'optimistis', 'bekal', 'lanjut', 'dampak', 'bukan', 'entas', 'anggur', 'tumbuh', 'ekonomi', 'lokal', 'kuat', 'daya', 'saing', 'usaha', 'cipta', 'lapang', 'kerja', 'baru', 'lanjut', 'inklusif', 'pungkas', 'darmawansyah', 'gambas', 'video']
+
+Dokumen 3: ['jakarta', 'indonesia', 'menteri', 'ketenagakerjaan', 'menaker', 'yassierli', 'nyata', 'transisi', 'tuju', 'ekonomi', 'hijau', 'rupa', 'momentum', 'penting', 'laku', 'transformasi', 'ketenagakerjaan', 'nasional', 'nilai', 'transisi', 'hijau', 'bukan', 'semata', 'agenda', 'lingkung', 'peluang', 'besar', 'cipta', 'kerja', 'layak', 'kuat', 'kompetensi', 'tenaga', 'kerja', 'bangun', 'ekonomi', 'inklusif', 'lanjut', 'sampai', 'yassierli', 'indonesia', 'international', 'sustainability', 'forum', 'jakarta', 'international', 'convention', 'center', 'jicc', 'sabtu', 'transisi', 'hijau', 'hasil', 'tenaga', 'kerja', 'siap', 'adaptasi', 'ubah', 'pasti', 'kerja', 'milik', 'sempat', 'tingkat', 'terampil', 'partisipasi', 'aktif', 'sektor', 'ekonomi', 'hijau', 'ujar', 'yassierli', 'advertisement', 'scroll', 'continue', 'content', 'hasil', 'transisi', 'hijau', 'yakin', 'gantung', 'kesiap', 'sumber', 'daya', 'manusia', 'kemnaker', 'cepat', 'laksana', 'program', 'tingkat', 'kompetensi', 'tenaga', 'kerja', 'lalu', 'upskilling', 'reskilling', 'fokus', 'kembang', 'terampil', 'hijau', 'kuat', 'ekosistem', 'latih', 'hijau', 'kemnaker', 'luas', 'kolaborasi', 'dunia', 'usaha', 'guru', 'tinggi', 'organisasi', 'internasional', 'lalu', 'kolaborasi', 'latih', 'hijau', 'harap', 'jangkau', 'lebih', 'banyak', 'daerah', 'cepat', 'transformasi', 'balai', 'latih', 'kerja', 'jadi', 'pusat', 'latih', 'adaptif', 'butuh', 'industri', 'masa', 'depan', 'transformasi', 'rupa', 'langkah', 'strategis', 'siap', 'tenaga', 'kerja', 'hadap', 'ubah', 'struktur', 'ekonomi', 'lalu', 'latih', 'hijau', 'cipta', 'tangguh', 'kompeten', 'daya', 'saing', 'bangun', 'lanjut', 'papar', 'yassierli', 'tekan', 'transisi', 'tuju', 'ekonomi', 'hijau', 'pusat', 'manusia', 'pasti', 'kerja', 'lindung', 'tinggal', 'proses', 'ubah', 'transisi', 'hijau', 'bukan', 'semata', 'agenda', 'lingkung', 'bagi', 'strategi', 'nasional', 'cipta', 'kerja', 'kualitas', 'kuat', 'tahan', 'ekonomi', 'wujud', 'masa', 'depan', 'indonesia', 'lebih', 'lanjut', 'pungkas', 'yassierli', 'gambas', 'video']
+
+Dokumen 4: ['jakarta', 'indonesia', 'transmart', 'full', 'sale', 'datang', 'hari', 'minggu', 'diskon', 'besar', 'besar', 'aneka', 'barang', 'elektronik', 'pilih', 'salah', 'satu', 'langgan', 'setia', 'transmart', 'beli', 'split', 'harga', 'diskon', 'harga', 'normal', 'unit', 'diskon', 'lihat', 'serbu', 'harga', 'promo', 'sepeda', 'transmart', 'full', 'sale', 'mulai', 'juta', 'advertisement', 'scroll', 'continue', 'content', 'murah', 'beli', 'transmart', 'banyak', 'bonus', 'harga', 'sebut', 'masuk', 'bonus', 'pipa', 'pasang', 'kapan', 'harga', 'murah', 'harga', 'spesial', 'dapat', 'beli', 'barang', 'elektronik', 'guna', 'allo', 'prime', 'bank', 'mega', 'bank', 'mega', 'syariah', 'maksimal', 'beli', 'kategori', 'jadi', 'pasti', 'punya', 'salah', 'satu', 'bank', 'rekomendasi', 'klaim', 'promo', 'nikmat', 'bagai', 'mudah', 'belanja', 'transmart', 'lie', 'punya', 'salah', 'satu', 'bank', 'rekomendasi', 'unduh', 'allo', 'bank', 'lalu', 'store', 'google', 'play', 'store', 'lalu', 'tingkat', 'akun', 'allo', 'prime', 'klaim', 'diskon', 'transmart', 'full', 'sale', 'buka', 'kartu', 'kredit', 'bank', 'mega', 'bank', 'mega', 'syariah', 'instan', 'gerai', 'transmart', 'catat', 'waktu', 'transmart', 'full', 'sale', 'langsung', 'toko', 'buka', 'hingga', 'tutup', 'pukul', 'waktu', 'tempat', 'seluruh', 'gerai', 'transmart', 'indonesia', 'langsung', 'rapat', 'transmart', 'dekat', 'sekarang', 'bawa', 'pulang', 'plus', 'bonus', 'pipa', 'pasang', 'gambas', 'video']
+
+Dokumen 5: ['jakarta', 'indonesia', 'program', 'magang', 'nasional', 'mulai', 'oktober', 'ikut', 'ribu', 'serta', 'program', 'untuk', 'lulus', 'guru', 'tinggi', 'maksimal', 'tahun', 'baik', 'sarjana', 'maupun', 'diploma', 'sekretaris', 'kabinet', 'seskab', 'teddy', 'indra', 'wijaya', 'kata', 'perintah', 'nanti', 'luas', 'jumlah', 'serta', 'magang', 'hingga', 'ratus', 'ribu', 'jadi', 'bulan', 'oktober', 'awal', 'gombang', 'pertama', 'ribu', 'tentu', 'segera', 'segera', 'buka', 'ribu', 'ribu', 'ratus', 'ujar', 'teddy', 'kutip', 'unggah', 'akun', 'instagram', 'sekretaris', 'kabinet', 'minggu', 'advertisement', 'scroll', 'continue', 'content', 'kata', 'kemenaker', 'kerja', 'sama', 'ribu', 'usaha', 'tempat', 'magang', 'lulus', 'guru', 'tinggi', 'ikut', 'program', 'sebut', 'lihat', 'kuota', 'tambah', 'kapan', 'daftar', 'magang', 'gaji', 'manfaat', 'satu', 'langsung', 'kerja', 'tanggal', 'bayang', 'tanggal', 'oktober', 'beliau', 'beliau', 'kerjasama', 'bagai', 'ribu', 'usaha', 'anggal', 'oktober', 'langsung', 'kerja', 'alam', 'ujar', 'teddy', 'kata', 'serta', 'dapat', 'uang', 'saku', 'perintah', 'sesuai', 'upah', 'minimum', 'provinsi', 'tempat', 'magang', 'jadi', 'contoh', 'berapa', 'misal', 'jakarta', 'arti', 'upah', 'minimum', 'sini', 'juta', 'juta', 'tiap', 'bulan', 'sarjana', 'kerja', 'magang', 'segitu', 'tentu', 'daerah', 'sesuai', 'upah', 'minimum', 'kota', 'daerah', 'sebut', 'ujar', 'gambas', 'instagram', 'kata', 'perintah', 'awal', 'laksana', 'program', 'magang', 'sebut', 'tinggal', 'kawal', 'betul', 'bagaimana', 'laksana', 'jauh', 'sangat', 'baik', 'tentu', 'berkat', 'teman', 'teman', 'pegawai', 'kemnaker', 'semua', 'ucap', 'gambas', 'video']
+# dst.
+            </pre>
+        </section>
+
+        <section>
+            <h2>3. Bag-of-Words (BOW) dan Dictionary</h2>
+            <pre>
+[ ]
+dictionary = gensim.corpora.Dictionary(processed_docs)
+
+# Kode ini akan mengiterasi dan mencetak semua item dalam kamus
+for k, v in dictionary.items():
+    print(k, v)
+            </pre>
+            <div style="font-size: 0.98em;">
+                <strong>Contoh hasil kamus Dictionary:</strong>
+                <pre style="max-height: 210px; overflow-y: scroll;">
+0 advertisement
+0 advertisement
+1 ajar
+2 amran
+3 atur
+4 badan
+5 bahas
+6 bank
+7 batas
+8 beberapa
+9 belum
+10 bijak
+11 bulan
+12 content
+13 continue
+14 copot
+15 dampak
+16 desa
+17 devisa
+18 diam
+19 efektivitas
+20 ekspor
+21 evaluasi
+22 februari
+23 gambas
+24 ganti
+25 gelar
+26 gibran
+27 harap
+28 hasil
+29 indonesia
+30 jadi
+31 jajar
+32 jakarta
+33 jalan
+34 jangka
+35 jauh
+36 jumlah
+37 kait
+38 kata
+39 kepala
+40 kertanegara
+41 khusus
+42 laku
+43 lalu
+44 lihat
+45 lokomotif
+46 luncur
+47 makanya
+48 makmur
+49 maksimal
+50 mana
+51 maret
+52 masalah
+53 masuk
+54 menteri
+55 miliar
+56 minggu
+57 minta
+58 mulai
+59 mungkin
+60 nasional
+61 negara
+62 negeri
+63 nilai
+64 nomor
+65 optimal
+66 pangan
+67 parkir
+68 perban
+69 perintah
+70 persen
+71 pilih
+72 prabowo
+73 prasetyo
+74 prediksi
+75 presiden
+76 publik
+77 rakabuming
+78 rakyat
+79 rapat
+80 redaksi
+81 rekening
+82 resmi
+83 scroll
+84 sebut
+85 segera
+86 sejahtera
+87 sejak
+88 sekretaris
+89 selatan
+90 siap
+91 sistem
+92 subianto
+93 sulaiman
+94 survei
+95 tadi
+96 tahun
+97 tani
+98 tembus
+99 tempat
+100 terap
+101 tetap
+102 tingkat
+103 tuang
+104 uang
+105 ujar
+106 video
+107 wajib
+108 wakil
+109 waktu
+110 zulhas
+111 adapun
+112 adil
+113 ajak
+114 akses
+115 anggur
+116 angkat
+117 antarlembaga
+118 apresiasi
+119 atas
+120 bagi
+121 balai
+122 bandung
+123 bangsa
+124 bangun
+125 banyak
+126 barat
+127 baru
+128 bbpkk
+129 bekal
+130 bengkel
+131 beri
+132 besar
+133 biaya
+134 bimbing
+135 bina
+136 binapenta
+137 buka
+138 bukan
+139 butuh
+140 cipta
+141 daerah
+142 darmawansyah
+143 daya
+144 didik
+145 dirjen
+146 dukung
+147 dunia
+148 ekonomi
+149 ekosistem
+150 entas
+151 fasilitas
+152 gerak
+153 imigrasi
+154 inklusif
+155 integrasi
+156 jahit
+157 janji
+158 kelompok
+159 kemenimipas
+160 kemnaker
+161 kerja
+162 ketenagakerjaan
+163 kewirausahaan
+164 klien
+165 kolaborasi
+166 komitmen
+167 komunitas
+168 konseling
+169 kuat
+170 lanjut
+171 lapang
+172 latih
+173 lebih
+174 lembaga
+175 lokal
+176 luas
+177 mandiri
+178 mang
+179 masyarakat
+180 maupun
+181 menaker
+182 milik
+183 narkotika
+184 nyata
+185 optimistis
+186 pasal
+187 pasar
+188 pasti
+189 penandatanganan
+190 penting
+191 pihak
+192 produktif
+193 program
+194 pungkas
+195 pusat
+196 rehabilitasi
+197 rentan
+198 roti
+199 rupa
+200 sabtu
+201 saing
+202 sama
+203 sampai
+204 sangat
+205 seluruh
+206 semangat
+207 sempat
+208 serta
+209 solusi
+210 strategis
+211 tantang
+212 teknis
+213 tenaga
+214 terus
+215 tumbuh
+216 usaha
+217 warga
+218 wirausaha
+219 wujud
+220 yakin
+221 yassierli
+222 adaptasi
+223 adaptif
+224 agenda
+225 aktif
+226 center
+227 cepat
+228 convention
+229 depan
+230 fokus
+231 forum
+232 gantung
+233 guru
+234 hadap
+235 hijau
+236 industri
+237 internasional
+238 international
+239 jangkau
+240 jicc
+241 kembang
+242 kesiap
+243 kompeten
+244 kompetensi
+245 kualitas
+246 laksana
+247 langkah
+248 layak
+249 lindung
+250 lingkung
+251 manusia
+252 masa
+253 momentum
+254 organisasi
+255 papar
+256 partisipasi
+257 peluang
+258 proses
+259 reskilling
+260 sektor
+261 semata
+262 strategi
+263 struktur
+264 sumber
+265 sustainability
+266 tahan
+267 tangguh
+268 tekan
+269 terampil
+270 tinggal
+271 tinggi
+272 transformasi
+273 transisi
+274 tuju
+275 ubah
+276 upskilling
+277 akun
+278 allo
+279 aneka
+280 bagai
+281 barang
+282 bawa
+283 belanja
+284 beli
+285 bonus
+286 catat
+287 dapat
+288 datang
+289 dekat
+290 diskon
+291 elektronik
+292 full
+293 gerai
+294 google
+295 guna
+296 harga
+297 hari
+298 hingga
+299 instan
+300 juta
+301 kapan
+302 kartu
+303 kategori
+304 klaim
+305 kredit
+306 langgan
+307 langsung
+308 lie
+309 mega
+310 mudah
+311 murah
+312 nikmat
+313 normal
+314 pasang
+315 pipa
+316 play
+317 plus
+318 prime
+319 promo
+320 pukul
+321 pulang
+322 punya
+323 rekomendasi
+324 salah
+325 sale
+326 satu
+327 sekarang
+328 sepeda
+329 serbu
+330 setia
+331 spesial
+332 split
+333 store
+334 syariah
+335 toko
+336 transmart
+337 tutup
+338 unduh
+339 unit
+340 alam
+341 anggal
+342 arti
+343 awal
+344 bagaimana
+345 baik
+346 bayang
+347 beliau
+348 berapa
+349 berkat
+350 betul
+351 contoh
+352 daftar
+353 diploma
+354 gaji
+355 gombang
+356 ikut
+357 indra
+358 instagram
+359 kabinet
+360 kawal
+361 kemenaker
+362 kerjasama
+363 kota
+364 kuota
+365 kutip
+366 lulus
+367 magang
+368 manfaat
+369 minimum
+370 misal
+371 nanti
+372 oktober
+373 pegawai
+374 pertama
+375 provinsi
+376 ratus
+377 ribu
+378 saku
+379 sarjana
+380 segitu
+381 semua
+382 seskab
+383 sesuai
+384 sini
+385 tambah
+386 tanggal
+387 teddy
+388 teman
+389 tentu
+390 tiap
+391 ucap
+392 unggah
+393 untuk
+394 upah
+395 wijaya
+396 aplikasi
+397 apparel
+398 balik
+399 benhill
+400 blus
+401 borong
+402 buah
+403 buat
+404 cara
+405 cari
+406 celana
+407 cewek
+408 department
+409 download
+410 dust
+411 ekstra
+412 exit
+413 gede
+414 geela
+415 gratis
+416 jangan
+417 jeans
+418 kamu
+419 kemeja
+420 keren
+421 ladies
+422 lama
+423 lewat
+424 merek
+425 nama
+426 pakai
+427 paylater
+428 periode
+429 pesta
+430 promonya
+431 sedang
+432 segar
+433 tebar
+434 tepat
+435 triset
+436 tunggu
+437 upgrade
+438 cuci
+439 cukup
+440 hujan
+441 impi
+442 inch
+443 lemari
+444 mesin
+445 mumpung
+446 potong
+447 produk
+448 smart
+449 tebus
+450 transaksi
+451 turun
+452 ukur
+453 alas
+454 alias
+455 amerika
+456 ancam
+457 bayar
+458 berang
+459 china
+460 dagang
+461 dominan
+462 donald
+463 earth
+464 elements
+465 jarang
+466 jinping
+467 jual
+468 jumat
+469 kapal
+470 kemudian
+471 ketat
+472 komoditas
+473 lahir
+474 lampau
+475 larang
+476 logam
+477 material
+478 memang
+479 militer
+480 munafik
+481 november
+482 operasi
+483 orang
+484 padahal
+485 pal
+486 paman
+487 pasok
+488 pimpin
+489 pindah
+490 poin
+491 rare
+492 sepakat
+493 serikat
+494 shutdown
+495 soal
+496 social
+497 sorot
+498 status
+499 tampak
+500 tanah
+501 tarif
+502 teknologi
+503 tengah
+504 tiba
+505 trump
+506 truth
+507 upaya
+508 usai
+509 utama
+510 agam
+511 alat
+512 appstore
+513 banget
+514 bunda
+515 cabang
+516 cuma
+517 gampang
+518 hoki
+519 ingat
+520 jawa
+521 kantor
+522 khawatir
+523 listrik
+524 luar
+525 lupa
+526 masak
+527 playstore
+528 pulau
+529 rupiah
+530 sedia
+531 tarik
+532 usah
+533 akademisi
+534 akuntabel
+535 akuntabilitas
+536 ambil
+537 anggota
+538 antara
+539 anugerah
+540 aparatur
+541 aset
+542 asosiasi
+543 aspek
+544 awas
+545 awat
+546 bantu
+547 beban
+548 beda
+549 berantas
+550 bidan
+551 bpjs
+552 bpkad
+553 bpkp
+554 cakup
+555 cermin
+556 dana
+557 data
+558 dekade
+559 digitalisasi
+560 dinas
+561 diri
+562 dokter
+563 duduk
+564 efektif
+565 faktor
+566 farmasi
+567 fondasi
+568 gandeng
+569 gotong
+570 hati
+571 henti
+572 hilir
+573 hulu
+574 humas
+575 implementasi
+576 independen
+577 instansi
+578 jaga
+579 jamin
+580 jar
+581 jasa
+582 jati
+583 kalah
+584 kasih
+585 kecil
+586 kelola
+587 kemenkes
+588 kemensos
+589 klinik
+590 kolektif
+591 komisi
+592 komponen
+593 kontribusi
+594 korupsi
+595 kunci
+596 layan
+597 layar
+598 lengkap
+599 libat
+600 mampu
+601 masing
+602 medis
+603 minimarket
+604 miskin
+605 mitra
+606 mutu
+607 obat
+608 otoritas
+609 pakar
+610 pasuk
+611 pbpu
+612 pemda
+613 peran
+614 periksa
+615 polri
+616 praktisi
+617 prinsip
+618 profesi
+619 puskesmas
+620 rata
+621 relevan
+622 rizzky
+623 royong
+624 rumah
+625 rumus
+626 sakit
+627 saling
+628 salur
+629 sambung
+630 segmen
+631 sehat
+632 selenggara
+633 serah
+634 simbol
+635 sipil
+636 sisi
+637 situ
+638 sosial
+639 swasta
+640 tanggung
+641 tegas
+642 terima
+643 transparan
+644 tugas
+645 tunjuk
+646 turut
+647 vital
+648 wilayah
+649 zaman
+650 ahmad
+651 airports
+652 alur
+653 angkasa
+654 area
+655 arsitek
+656 asia
+657 award
+658 band
+659 bandara
+660 best
+661 cantik
+662 capai
+663 chengdu
+664 cheongju
+665 choice
+666 conde
+667 corak
+668 darat
+669 destinasi
+670 dorong
+671 gateway
+672 gedung
+673 general
+674 gusti
+675 hubung
+676 indah
+677 infrastruktur
+678 injourney
+679 island
+680 januari
+681 jembatan
+682 jemput
+683 kapasitas
+684 kelas
+685 kendara
+686 khas
+687 konektivitas
+688 korea
+689 manager
+690 mancanegara
+691 maskapai
+692 motor
+693 naik
+694 nast
+695 ngurah
+696 nobat
+697 nuansa
+698 nusantara
+699 nyaman
+700 panjang
+701 pariwisata
+702 penuh
+703 pesawat
+704 pilar
+705 predikat
+706 premise
+707 prioritas
+708 pura
+709 raih
+710 readers
+711 rute
+712 sandang
+713 seberang
+714 september
+715 shahab
+716 skor
+717 stakeholder
+718 standar
+719 syaugi
+720 tata
+721 terbang
+722 terminal
+723 titik
+724 tourism
+725 traveller
+726 tumpang
+727 tutur
+728 ulang
+729 umum
+730 wisatawan
+731 world
+732 apabila
+733 banting
+734 enggak
+735 hemat
+736 kulkas
+737 kunjung
+738 muda
+739 saat
+740 side
+741 syarat
+742 ayam
+743 bahan
+744 besok
+745 broiler
+746 buru
+747 dapur
+748 ekor
+749 jabodetabek
+750 makassar
+751 minimal
+752 pangkal
+753 pear
+754 perlu
+755 pinang
+756 sabun
+757 timur
+758 anggar
+759 apbd
+760 arsitektur
+761 asal
+762 asmoko
+763 concrete
+764 detik
+765 direktur
+766 fase
+767 finance
+768 finish
+769 gad
+770 gangsa
+771 girder
+772 istana
+773 jalur
+774 karya
+775 kelapa
+776 kereta
+777 kilometer
+778 kini
+779 kontraktor
+780 lapor
+781 lima
+782 lintas
+783 manggarai
+784 mangkas
+785 matraman
+786 menit
+787 moda
+788 modal
+789 nindya
+790 pemuda
+791 persero
+792 polemik
+793 pramuka
+794 precast
+795 prestressed
+796 progres
+797 propertindo
+798 proyek
+799 rampung
+800 rawamangun
+801 respons
+802 roda
+803 selaku
+804 sempurna
+805 stasiun
+806 tahap
+807 target
+808 tempuh
+809 tender
+810 terang
+811 total
+812 trackwork
+813 transportasi
+814 triliun
+815 ungkap
+816 velodrome
+817 waskita
+818 front
+819 load
+820 ambruk
+821 asrama
+822 budur
+823 khoziny
+824 lantai
+825 musala
+826 ponpes
+827 putra
+828 senin
+829 sidoarjo
+830 sore
+831 tiga
+832 bagus
+833 bango
+834 biore
+835 cair
+836 delmonte
+837 detergen
+838 fresh
+839 gelas
+840 gentle
+841 indofood
+842 indomie
+843 kalau
+844 kecap
+845 kemas
+846 klin
+847 kuah
+848 lemon
+849 lifebuoy
+850 mama
+851 mandi
+852 nuvo
+853 piring
+854 sambal
+855 sarimi
+856 saus
+857 sedaap
+858 sedap
+859 sleek
+860 supermie
+861 tangga
+862 tenang
+863 tomat
+864 adik
+865 agustus
+866 akhir
+867 alih
+868 alokasi
+869 aman
+870 anak
+871 arab
+872 asumsi
+873 australia
+874 azerbaijan
+875 baca
+876 bahkan
+877 bakal
+878 bar
+879 bebas
+880 bela
+881 bentuk
+882 berani
+883 berita
+884 bincang
+885 biologis
+886 bisnis
+887 blockchain
+888 blokir
+889 brilian
+890 buruk
+891 cabut
+892 cerita
+893 channel
+894 chat
+895 colok
+896 cuan
+897 dahulu
+898 dare
+899 digital
+900 distopia
+901 distribusi
+902 dolar
+903 donasi
+904 donor
+905 dosen
+906 dubai
+907 durov
+908 ekstrem
+909 emirat
+910 enam
+911 enkripsi
+912 eropa
+913 euro
+914 fitur
+915 forbes
+916 fridman
+917 gabe
+918 gagas
+919 gamer
+920 ganggu
+921 gara
+922 generasi
+923 habis
+924 halang
+925 harta
+926 henry
+927 himpun
+928 hindar
+929 identitas
+930 iklan
+931 ilmuwan
+932 informasi
+933 inggris
+934 instans
+935 internet
+936 investor
+937 iring
+938 istirahat
+939 izin
+940 jabat
+941 jejaring
+942 jerman
+943 juluk
+944 kabur
+945 kaki
+946 karibia
+947 kaya
+948 kemarin
+949 kenal
+950 kendali
+951 ketimbang
+952 keturunanya
+953 kewarganegaraan
+954 kira
+955 kisah
+956 kitts
+957 kompromi
+958 komputer
+959 konsisten
+960 konten
+961 kontrol
+962 kreativitas
+963 kriminal
+964 kritik
+965 kuliah
+966 kurang
+967 kurs
+968 larut
+969 laut
+970 lawan
+971 level
+972 lunak
+973 main
+974 makin
+975 malam
+976 massal
+977 mati
+978 media
+979 medium
+980 mewanti
+981 mini
+982 mode
+983 moderasi
+984 momen
+985 muncul
+986 nevis
+987 newell
+988 nikolai
+989 oleh
+990 oposisi
+991 orisinal
+992 pagi
+993 patuh
+994 pavel
+995 penjara
+996 perangkat
+997 perempuan
+998 pernah
+999 persekusi
+1000 pesan
+1001 petersburg
+1002 pikir
+1003 pindai
+1004 platform
+1005 ponsel
+1006 pornografi
+1007 prancis
+1008 premium
+1009 pribadi
+1010 privasi
+1011 ramal
+1012 raya
+1013 rebut
+1014 rencana
+1015 retas
+1016 rival
+1017 robot
+1018 rombak
+1019 rusia
+1020 russian
+1021 rutin
+1022 saint
+1023 samueli
+1024 sana
+1025 sejarah
+1026 sekali
+1027 sekaligus
+1028 selamat
+1029 selidik
+1030 sendiri
+1031 sensor
+1032 sentuh
+1033 serampang
+1034 seru
+1035 setararp
+1036 siapa
+1037 singkat
+1038 sisa
+1039 smartphone
+1040 sperma
+1041 state
+1042 suara
+1043 suka
+1044 tahu
+1045 taipan
+1046 taksir
+1047 tangkap
+1048 tara
+1049 telegram
+1050 tentang
+1051 terorisme
+1052 tidur
+1053 tolak
+1054 tuduh
+1055 tukar
+1056 tulis
+1057 twit
+1058 university
+1059 urut
+1060 usia
+1061 vkontakte
+1062 wafat
+1063 wanti
+1064 waris
+1065 wasiat
+1066 whatsapp
+1067 zuckerberg
+1068 beijing
+1069 benar
+1070 boeing
+1071 chip
+1072 kali
+1073 lansir
+1074 materials
+1075 negosiasi
+1076 nvidia
+1077 onderdil
+1078 panas
+1079 perang
+1080 putus
+1081 saham
+1082 setop
+1083 arah
+1084 arena
+1085 asnawi
+1086 babak
+1087 bawah
+1088 belanda
+1089 bunuh
+1090 cetak
+1091 cruijff
+1092 dagu
+1093 dalam
+1094 dijk
+1095 dominasi
+1096 dulu
+1097 final
+1098 finlandia
+1099 gagal
+1100 gasak
+1101 gera
+1102 gonzales
+1103 hormat
+1104 idzes
+1105 janggut
+1106 jelas
+1107 jemari
+1108 johan
+1109 justru
+1110 kerap
+1111 khan
+1112 koleksi
+1113 kualifikasi
+1114 laga
+1115 lepas
+1116 letak
+1117 liverpool
+1118 lolos
+1119 makna
+1120 melambang
+1121 meski
+1122 mimpi
+1123 mirip
+1124 nasib
+1125 nila
+1126 oranje
+1127 oranye
+1128 percaya
+1129 piala
+1130 pintas
+1131 populer
+1132 positif
+1133 putar
+1134 putri
+1135 romeny
+1136 saeed
+1137 selang
+1138 selebrasi
+1139 singkir
+1140 sulit
+1141 sumbang
+1142 surat
+1143 tampil
+1144 tanding
+1145 tangan
+1146 tegak
+1147 tempel
+1148 terlalu
+1149 timnas
+1150 tiru
+1151 usut
+1152 virgil
+1153 zona
+1154 aksi
+1155 alho
+1156 amsterdam
+1157 antisipasi
+1158 antman
+1159 assist
+1160 barcelona
+1161 bart
+1162 bentrok
+1163 bola
+1164 cody
+1165 delapan
+1166 denzel
+1167 depay
+1168 donyell
+1169 dumfriez
+1170 eksekusi
+1171 gakpo
+1172 ganda
+1173 gawang
+1174 gilir
+1175 gravenberg
+1176 grup
+1177 jong
+1178 joronen
+1179 justin
+1180 kairinen
+1181 kanan
+1182 keras
+1183 keskinen
+1184 klasemen
+1185 kluivert
+1186 koski
+1187 kotak
+1188 lahteenmaki
+1189 malen
+1190 mantan
+1191 mantap
+1192 memphis
+1193 menang
+1194 nigel
+1195 papan
+1196 pelak
+1197 penalti
+1198 pendek
+1199 peringkat
+1200 pojok
+1201 posisi
+1202 puncak
+1203 sembilan
+1204 silang
+1205 stahl
+1206 sukses
+1207 sundul
+1208 susun
+1209 tembak
+1210 tenho
+1211 timber
+1212 tuan
+1213 tujuh
+1214 ukir
+1215 umpan
+1216 unggul
+1217 vaananen
+1218 verbruggen
+1219 walta
+1220 abdullah
+1221 akbar
+1222 andal
+1223 bahrain
+1224 belakang
+1225 bicara
+1226 city
+1227 colong
+1228 diks
+1229 dini
+1230 eliano
+1231 empat
+1232 fifa
+1233 foto
+1234 garuda
+1235 iqbal
+1236 irak
+1237 jeddah
+1238 jepang
+1239 juni
+1240 kala
+1241 kandas
+1242 kapten
+1243 kenang
+1244 kevin
+1245 king
+1246 laju
+1247 lirik
+1248 mangkualam
+1249 merah
+1250 panggil
+1251 patrick
+1252 port
+1253 putih
+1254 rank
+1255 reijnders
+1256 rekan
+1257 sandy
+1258 saudi
+1259 sayap
+1260 sayur
+1261 sepak
+1262 shin
+1263 sisih
+1264 sport
+1265 stadion
+1266 tekuk
+1267 turnamen
+1268 walsh
+1269 yakob
+1270 yong
+1271 zidane
+1272 asean
+1273 bobol
+1274 buang
+1275 gulung
+1276 hilang
+1277 hukum
+1278 judul
+1279 kubur
+1280 love
+1281 malaysia
+1282 mauro
+1283 metro
+1284 musnah
+1285 oper
+1286 ridho
+1287 rizky
+1288 ronde
+1289 sirna
+1290 skuad
+1291 sudut
+1292 takluk
+1293 tekel
+1294 tenggara
+1295 tetangga
+1296 tiket
+1297 untun
+1298 wayang
+1299 zijlstra
+1300 angka
+1301 buntut
+1302 damp
+1303 duel
+1304 emas
+1305 finis
+1306 heran
+1307 juang
+1308 juru
+1309 kalian
+1310 kolega
+1311 kursi
+1312 liga
+1313 maaf
+1314 mohon
+1315 negatif
+1316 ning
+1317 paksa
+1318 persija
+1319 sayang
+1320 sedih
+1321 sedikit
+1322 selalu
+1323 selasa
+1324 sengit
+1325 suporter
+1326 tarung
+1327 tidak
+1328 wasit
+1329 agony
+1330 antarpemain
+1331 atmosfer
+1332 bangkit
+1333 bisa
+1334 dari
+1335 doha
+1336 duka
+1337 elemen
+1338 erti
+1339 gambar
+1340 gemar
+1341 gugah
+1342 halaman
+1343 hebat
+1344 ikat
+1345 istimewa
+1346 joey
+1347 kecewa
+1348 keluarga
+1349 kontroversial
+1350 mata
+1351 mula
+1352 musuh
+1353 optimisme
+1354 panggung
+1355 pelupessy
+1356 rasa
+1357 rekor
+1358 rollercoaster
+1359 sassuolo
+1360 saudara
+1361 segala
+1362 sing
+1363 staf
+1364 syukur
+1365 tulus
+1366 aneh
+1367 anggap
+1368 calvin
+1369 darah
+1370 gelandang
+1371 injury
+1372 jatuh
+1373 jegal
+1374 jelang
+1375 kawan
+1376 kena
+1377 keringat
+1378 kiri
+1379 klok
+1380 kontroversi
+1381 kuning
+1382 lancar
+1383 lini
+1384 maarten
+1385 paes
+1386 pantas
+1387 picu
+1388 primeur
+1389 protes
+1390 sengaja
+1391 serang
+1392 striker
+1393 tahseen
+1394 tampar
+1395 tanduk
+1396 terobos
+1397 time
+1398 tipis
+1399 tumpah
+1400 ujung
+1401 verdonk
+1402 viral
+1403 voetbal
+1404 wajah
+1405 warna
+1406 zaid
+1407 abdi
+1408 abroad
+1409 ahli
+1410 alami
+1411 alfred
+1412 amatir
+1413 angan
+1414 aterissage
+1415 bahasa
+1416 balas
+1417 batman
+1418 begin
+1419 begitu
+1420 benah
+1421 bintang
+1422 biru
+1423 brasil
+1424 bruce
+1425 chute
+1426 cklamovski
+1427 deret
+1428 derita
+1429 domestik
+1430 edisi
+1431 fall
+1432 federasi
+1433 film
+1434 garansi
+1435 garis
+1436 ginseng
+1437 global
+1438 gore
+1439 gulir
+1440 haine
+1441 hajar
+1442 hajime
+1443 hakim
+1444 hamad
+1445 hans
+1446 hidetoshi
+1447 hidup
+1448 higeki
+1449 hubert
+1450 imbang
+1451 importance
+1452 istilah
+1453 italia
+1454 jaffar
+1455 jenjang
+1456 kadung
+1457 kalimat
+1458 kamis
+1459 kazu
+1460 kazuyoshi
+1461 keran
+1462 khalifa
+1463 kias
+1464 klise
+1465 klub
+1466 kompetisi
+1467 kompetitif
+1468 komposisi
+1469 konteks
+1470 kritikus
+1471 kubu
+1472 kurun
+1473 label
+1474 lang
+1475 league
+1476 learn
+1477 legenda
+1478 legendaris
+1479 lenyap
+1480 lisan
+1481 manis
+1482 masashi
+1483 matahari
+1484 metafora
+1485 miris
+1486 miura
+1487 moriyasu
+1488 musim
+1489 nakata
+1490 nakayama
+1491 naturalisasi
+1492 niscaya
+1493 nyaris
+1494 omran
+1495 ooft
+1496 orbit
+1497 pahit
+1498 pasu
+1499 payung
+1500 pecat
+1501 pennyworth
+1502 pensiun
+1503 pentas
+1504 peperangan
+1505 peristiwa
+1506 pesat
+1507 photo
+1508 pick
+1509 plan
+1510 profesional
+1511 proyeksi
+1512 pssi
+1513 ramos
+1514 rancang
+1515 rela
+1516 remi
+1517 representasi
+1518 roadmap
+1519 rubuh
+1520 salam
+1521 samurai
+1522 say
+1523 selisih
+1524 senja
+1525 signifikan
+1526 simpul
+1527 situs
+1528 sontak
+1529 stimulan
+1530 tandu
+1531 tapak
+1532 temu
+1533 terbit
+1534 terjemah
+1535 tokoh
+1536 tumbang
+1537 tumpu
+1538 tunda
+1539 vinz
+1540 visi
+1541 wayne
+1542 year
+1543 bogor
+1544 divisi
+1545 dramatis
+1546 electric
+1547 four
+1548 jadwal
+1549 juara
+1550 kejar
+1551 lavani
+1552 livoli
+1553 magetan
+1554 mageti
+1555 mental
+1556 navy
+1557 partai
+1558 puas
+1559 segel
+1560 solid
+1561 toreh
+1562 voli
+1563 yance
+1564 cristiano
+1565 irlandia
+1566 jamu
+1567 portugal
+1568 republik
+1569 ronaldo
+1570 tercopy
+1571 anda
+1572 bangga
+1573 bara
+1574 biasa
+1575 cinta
+1576 emosional
+1577 jersey
+1578 marc
+1579 menggarisbawahi
+1580 misi
+1581 patah
+1582 saksi
+1583 sali
+1584 segenap
+1585 sekadar
+1586 teguh
+1587 tempa
+1588 agresif
+1589 andai
+1590 autonne
+1591 bidik
+1592 bila
+1593 caio
+1594 getar
+1595 kondisi
+1596 kouame
+1597 lantar
+1598 lucas
+1599 malah
+1600 marcus
+1601 melon
+1602 pegang
+1603 qatar
+1604 sejati
+1605 skema
+1606 ikan
+1607 kembar
+1608 saran
+1609 sesal
+1610 support
+1611 cermat
+1612 ciri
+1613 familiar
+1614 fan
+1615 gaya
+1616 hangat
+1617 haye
+1618 keluar
+1619 kerumun
+1620 konfederasi
+1621 manajer
+1622 master
+1623 pattynama
+1624 peluit
+1625 selesai
+1626 seringkali
+1627 shayne
+1628 sina
+1629 sumardji
+1630 thom
+1631 topik
+1632 darul
+1633 datuk
+1634 desak
+1635 harimau
+1636 ingin
+1637 jamal
+1638 jawab
+1639 johor
+1640 kasus
+1641 komentar
+1642 malaya
+1643 minat
+1644 nasir
+1645 pahang
+1646 peter
+1647 respek
+1648 revolusi
+1649 sikap
+1650 sopan
+1651 sosok
+1652 bunyi
+1653 cheng
+1654 edar
+1655 hampir
+1656 hendak
+1657 insiden
+1658 jianxin
+1659 jingyuan
+1660 layang
+1661 ming
+1662 netizen
+1663 ofisial
+1664 pancing
+1665 reaksi
+1666 rugi
+1667 tajam
+1668 yaituzhou
+1669 zhang
+1670 bench
+1671 dasar
+1672 datar
+1673 disiplin
+1674 drama
+1675 juli
+1676 krusial
+1677 kuasa
+1678 langgar
+1679 minum
+1680 produktivitas
+1681 pupus
+1682 puruk
+1683 rentang
+1684 tren
+1685 tunggal
+1686 agregat
+1687 antar
+1688 bandar
+1689 bantai
+1690 begawan
+1691 bersih
+1692 brunei
+1693 darussalam
+1694 fiipina
+1695 filipina
+1696 gabung
+1697 lakon
+1698 mulus
+1699 patut
+1700 perdana
+1701 rincian
+1702 runner
+1703 sapu
+1704 seri
+1705 tandang
+1706 telak
+1707 vietnam
+1708 akrab
+1709 asuh
+1710 caption
+1711 coba
+1712 cristian
+1713 curi
+1714 gema
+1715 halau
+1716 individu
+1717 istri
+1718 jeda
+1719 kamera
+1720 loco
+1721 luap
+1722 mupus
+1723 rekam
+1724 sapa
+1725 seperti
+1726 sikat
+1727 tagar
+1728 tangis
+1729 tanya
+1730 televisi
+1731 alir
+1732 cerna
+1733 cita
+1734 dallas
+1735 kabar
+1736 lambat
+1737 merosot
+1738 patri
+1739 sadar
+1740 sokong
+1741 takjub
+1742 volendam
+1743 amat
+1744 antariksa
+1745 arizona
+1746 astronom
+1747 astronomi
+1748 awan
+1749 batu
+1750 benda
+1751 bezugly
+1752 bumi
+1753 cahaya
+1754 carrie
+1755 catalina
+1756 citra
+1757 cumbres
+1758 departemen
+1759 deteksi
+1760 dipper
+1761 duga
+1762 eksposur
+1763 elips
+1764 fenomena
+1765 gelap
+1766 heliospheric
+1767 holt
+1768 instrumen
+1769 jarak
+1770 komet
+1771 kstars
+1772 lacak
+1773 langit
+1774 langka
+1775 lemmon
+1776 lokasi
+1777 manciano
+1778 maryland
+1779 meteor
+1780 minim
+1781 mount
+1782 muka
+1783 nasa
+1784 ngaku
+1785 observatorium
+1786 observatory
+1787 oort
+1788 pandang
+1789 planetarium
+1790 polusi
+1791 purba
+1792 quanzhi
+1793 rasi
+1794 real
+1795 senior
+1796 siar
+1797 soho
+1798 solar
+1799 stellarium
+1800 sublim
+1801 survey
+1802 surya
+1803 swan
+1804 tayang
+1805 tegal
+1806 telanjang
+1807 telescope
+1808 teliti
+1809 teropong
+1810 ukraina
+1811 universitas
+1812 utara
+1813 virtual
+1814 vladimir
+1815 epak
+1816 gunting
+1817 jagung
+1818 kupu
+1819 monarch
+1820 nature
+1821 prosedur
+1822 saraf
+1823 smithtown
+1824 sweetbriar
+1825 tepung
+1826 transplantasi
+1827 york
+1828 abai
+1829 absen
+1830 akal
+1831 anything
+1832 asing
+1833 bahaya
+1834 blak
+1835 blakan
+1836 bukti
+1837 buku
+1838 cegah
+1839 cerdas
+1840 chatbot
+1841 chatgpt
+1842 disalahgunakan
+1843 elon
+1844 engineer
+1845 eric
+1846 etika
+1847 guardrails
+1848 hadir
+1849 hapus
+1850 imbuh
+1851 imitasi
+1852 jailbreak
+1853 kendati
+1854 kissinger
+1855 konferensi
+1856 libur
+1857 london
+1858 macam
+1859 mekanisme
+1860 metode
+1861 miliarder
+1862 model
+1863 modifikasi
+1864 mrbeast
+1865 musk
+1866 nuklir
+1867 openai
+1868 perlahan
+1869 post
+1870 potensi
+1871 proliferation
+1872 rabu
+1873 regime
+1874 rekayasa
+1875 reverse
+1876 risiko
+1877 schmidt
+1878 sebar
+1879 senjata
+1880 sifat
+1881 sift
+1882 skenario
+1883 spacex
+1884 summit
+1885 tanggap
+1886 terminator
+1887 thailand
+1888 umat
+1889 versi
+1890 yesus
+1891 acara
+1892 alternatif
+1893 asai
+1894 assessment
+1895 atau
+1896 berat
+1897 bohong
+1898 business
+1899 cantum
+1900 cnbc
+1901 cocok
+1902 conference
+1903 ecek
+1904 edwin
+1905 game
+1906 generate
+1907 hidayat
+1908 igdx
+1909 igrs
+1910 judi
+1911 kalang
+1912 kandung
+1913 karakter
+1914 klasifikasi
+1915 komdigi
+1916 kompensasi
+1917 komunikasi
+1918 kuta
+1919 login
+1920 menkomdigi
+1921 musik
+1922 opsel
+1923 permanen
+1924 pinjam
+1925 rat
+1926 ratingnya
+1927 register
+1928 regulasi
+1929 roblox
+1930 sambut
+1931 sanksi
+1932 sela
+1933 self
+1934 studi
+1935 system
+1936 take
+1937 takedown
+1938 taruh
+1939 umur
+1940 unsur
+1941 user
+1942 verifikasi
+1943 wacana
+1944 abad
+1945 akibat
+1946 aktivitas
+1947 atlantik
+1948 badai
+1949 banjir
+1950 basah
+1951 bencana
+1952 bidang
+1953 bmkg
+1954 cenderung
+1955 cnnindonesia
+1956 cuaca
+1957 curah
+1958 deputi
+1959 desember
+1960 dingin
+1961 dipole
+1962 durasi
+1963 ekuator
+1964 enso
+1965 geofisika
+1966 guswanto
+1967 iklim
+1968 indian
+1969 indikasi
+1970 kalimantan
+1971 kering
+1972 klimatolog
+1973 klimatologi
+1974 lemah
+1975 longsor
+1976 maju
+1977 mayoritas
+1978 meteorologi
+1979 netral
+1980 nina
+1981 ocean
+1982 pasifik
+1983 prakira
+1984 samudra
+1985 sebab
+1986 suhu
+1987 sumatera
+1988 tajuk
+1989 tanda
+1990 triple
+1991 tropis
+1992 albania
+1993 biosfer
+1994 cagar
+1995 lembah
+1996 unesco
+1997 vjosa
+1998 argentina
+1999 belikat
+2000 bonapartenykus
+2001 dinosaurus
+2002 ekspedisi
+2003 esok
+2004 fosil
+2005 hewan
+2006 ilmu
+2007 kadal
+2008 kawasan
+2009 lestari
+2010 mamalia
+2011 museum
+2012 negro
+2013 paha
+2014 paham
+2015 paleontolog
+2016 paruh
+2017 proporsi
+2018 sauropoda
+2019 spesies
+2020 tulang
+2021 ular
+2022 ultimus
+2023 akurat
+2024 analisis
+2025 anomali
+2026 bitung
+2027 bnpb
+2028 bpbd
+2029 bujur
+2030 centimeter
+2031 dangkal
+2032 daryono
+2033 episenter
+2034 essang
+2035 ganalo
+2036 gauge
+2037 gelombang
+2038 gempa
+2039 halmahera
+2040 karatung
+2041 konfirmasi
+2042 koordinasi
+2043 koordinat
+2044 lintang
+2045 magnitudo
+2046 malu
+2047 melonguane
+2048 minahasa
+2049 minor
+2050 morotai
+2051 observasi
+2052 papua
+2053 pasca
+2054 pesisir
+2055 sangihe
+2056 subduksi
+2057 sulawesi
+2058 supiori
+2059 talaud
+2060 tanggulang
+2061 tektonik
+2062 tsunami
+2063 waspada
+2064 bayi
+2065 betina
+2066 binatang
+2067 bobot
+2068 induk
+2069 kebun
+2070 kilogram
+2071 kuda
+2072 nala
+2073 rilis
+2074 samping
+2075 aftershock
+2076 daerahtahuna
+2077 dihimbau
+2078 estimasi
+2079 evakuasi
+2080 fault
+2081 gempabumi
+2082 goyang
+2083 hiposenternya
+2084 imbas
+2085 intensitas
+2086 jenis
+2087 manado
+2088 monitor
+2089 pantai
+2090 pengaruh
+2091 perhati
+2092 propinsi
+2093 retak
+2094 ringan
+2095 rusa
+2096 rusak
+2097 siaga
+2098 siang
+2099 skala
+2100 stabil
+2101 sulut
+2102 sungai
+2103 susul
+2104 tepi
+2105 thrust
+2106 timbul
+2107 agate
+2108 coffee
+2109 coral
+2110 desain
+2111 developer
+2112 eksistensi
+2113 exchange
+2114 fund
+2115 industry
+2116 inisiatif
+2117 investasi
+2118 kancah
+2119 kapabilitas
+2120 komersial
+2121 konsol
+2122 kotor
+2123 kreatif
+2124 lewa
+2125 limpah
+2126 match
+2127 mobile
+2128 outsource
+2129 paper
+2130 pemrograman
+2131 permit
+2132 potion
+2133 pres
+2134 purchase
+2135 salin
+2136 senjang
+2137 space
+2138 steam
+2139 studio
+2140 tabung
+2141 talent
+2142 talk
+2143 unbind
+2144 ventura
+2145 white
+2146 absorb
+2147 aerosol
+2148 analis
+2149 arus
+2150 brighter
+2151 cere
+2152 cloud
+2153 emisi
+2154 energi
+2155 energy
+2156 geser
+2157 hambur
+2158 jernih
+2159 kompleksitas
+2160 longwave
+2161 meter
+2162 news
+2163 outgo
+2164 pancar
+2165 pantau
+2166 pantul
+2167 persegi
+2168 planet
+2169 pola
+2170 radiant
+2171 radiation
+2172 rinci
+2173 rotasi
+2174 salju
+2175 satelit
+2176 serap
+2177 sinar
+2178 sirkulasi
+2179 udara
+2180 watt
+2181 akselerator
+2182 alamat
+2183 apple
+2184 authorize
+2185 banderol
+2186 banner
+2187 bionic
+2188 digimap
+2189 distributor
+2190 email
+2191 fabrikasi
+2192 fusion
+2193 generatif
+2194 genggam
+2195 handphone
+2196 hitam
+2197 ibox
+2198 inti
+2199 iphone
+2200 kabut
+2201 klik
+2202 konsumen
+2203 kosmik
+2204 laman
+2205 laris
+2206 lavender
+2207 lipat
+2208 mahal
+2209 memori
+2210 mesan
+2211 neural
+2212 offline
+2213 opsi
+2214 order
+2215 pandu
+2216 pekat
+2217 pemrosesan
+2218 perak
+2219 performa
+2220 prores
+2221 registrasi
+2222 reseller
+2223 sage
+2224 selfie
+2225 series
+2226 simak
+2227 simpan
+2228 stage
+2229 submit
+2230 tawar
+2231 telepon
+2232 varian
+2233 xiaomi
+2234 akumulasi
+2235 guyur
+2236 lebat
+2237 wilayuah
+2238 anima
+2239 budaya
+2240 literasi
+2241 ramah
+2242 saji
+2243 timun
+2244 abadi
+2245 amoled
+2246 angnieszca
+2247 antutu
+2248 artistik
+2249 balut
+2250 bang
+2251 basic
+2252 batera
+2253 baterai
+2254 camera
+2255 cerah
+2256 charge
+2257 chipset
+2258 cool
+2259 debu
+2260 device
+2261 dimensity
+2262 dinamis
+2263 dokumentasi
+2264 dual
+2265 edit
+2266 edition
+2267 efek
+2268 energik
+2269 fire
+2270 flagship
+2271 flow
+2272 fotografi
+2273 free
+2274 genie
+2275 glare
+2276 gram
+2277 green
+2278 hangout
+2279 hibur
+2280 honor
+2281 inci
+2282 inovasi
+2283 instruksi
+2284 internal
+2285 kings
+2286 kombinasi
+2287 konfigurasi
+2288 kreator
+2289 krisva
+2290 kulit
+2291 lapis
+2292 lead
+2293 leather
+2294 legend
+2295 lensa
+2296 magicglow
+2297 midrange
+2298 motif
+2299 neon
+2300 night
+2301 nightscape
+2302 nits
+2303 pacu
+2304 party
+2305 pink
+2306 portrait
+2307 power
+2308 promosi
+2309 prosesor
+2310 pubg
+2311 public
+2312 range
+2313 rate
+2314 realme
+2315 record
+2316 refresh
+2317 relations
+2318 remover
+2319 resolusi
+2320 sederhana
+2321 serial
+2322 sering
+2323 sertifikasi
+2324 short
+2325 silk
+2326 silver
+2327 snapdragon
+2328 sony
+2329 spesifikasi
+2330 stylish
+2331 suasana
+2332 suit
+2333 tanam
+2334 tebal
+2335 throne
+2336 titanium
+2337 ultra
+2338 unik
+2339 vegan
+2340 velvet
+2341 vlog
+2342 wide
+2343 algoritma
+2344 arief
+2345 atma
+2346 audiens
+2347 bikin
+2348 bollywood
+2349 brian
+2350 bruto
+2351 cakap
+2352 chief
+2353 code
+2354 confiction
+2355 demo
+2356 dengar
+2357 diobok
+2358 drive
+2359 economy
+2360 entertainment
+2361 experience
+2362 founder
+2363 hartono
+2364 india
+2365 kolaboratif
+2366 konsumsi
+2367 labs
+2368 laptop
+2369 lokadata
+2370 lonjak
+2371 lunch
+2372 martin
+2373 musisi
+2374 obok
+2375 officer
+2376 pandemi
+2377 produksi
+2378 puluh
+2379 rich
+2380 rifstorm
+2381 rise
+2382 sarana
+2383 seni
+2384 soft
+2385 subsektor
+2386 suwandi
+2387 talenta
+2388 valthirian
+2389 venture
+2390 vokal
+2391 warren
+2392 widhiyasa
+2393 android
+2394 cadang
+2395 diinstal
+2396 dokumen
+2397 hotspot
+2398 icloud
+2399 individual
+2400 info
+2401 instal
+2402 kembali
+2403 ketuk
+2404 kode
+2405 live
+2406 lollipop
+2407 migrasi
+2408 obrol
+2409 otomatis
+2410 pabrik
+2411 profil
+2412 reguler
+2413 riwayat
+2414 transfer
+2415 hadiah
+2416 kimia
+2417 muslim
+2418 nobel
+2419 omar
+2420 yaghi
+2421 animasi
+2422 billboard
+2423 boys
+2424 brigham
+2425 british
+2426 chart
+2427 chri
+2428 dean
+2429 debut
+2430 delap
+2431 demon
+2432 detail
+2433 dokkaebi
+2434 everland
+2435 fiksi
+2436 genteng
+2437 golden
+2438 group
+2439 gwishin
+2440 gyeonggi
+2441 hanok
+2442 hunters
+2443 huntr
+2444 iblis
+2445 idol
+2446 inspirasi
+2447 karena
+2448 kaum
+2449 komentator
+2450 kpop
+2451 kuliner
+2452 lagu
+2453 mark
+2454 narasi
+2455 need
+2456 netflix
+2457 norigae
+2458 official
+2459 olivia
+2460 ornamen
+2461 pekan
+2462 perspektif
+2463 peterson
+2464 popularitas
+2465 profesor
+2466 puji
+2467 resonansi
+2468 resort
+2469 rujuk
+2470 rumi
+2471 salip
+2472 sangkal
+2473 santa
+2474 sekuel
+2475 sembunyi
+2476 seoul
+2477 serbet
+2478 show
+2479 single
+2480 situasi
+2481 soda
+2482 soundtrack
+2483 spin
+2484 stream
+2485 sumpit
+2486 tonight
+2487 tonton
+2488 topi
+2489 tower
+2490 tradisional
+2491 tubuh
+2492 utah
+2493 visual
+2494 yongin
+2495 young
+2496 aadc
+2497 adegan
+2498 agen
+2499 armie
+2500 ayah
+2501 backtrace
+2502 bahu
+2503 bioskop
+2504 boyong
+2505 bromance
+2506 cavil
+2507 cavill
+2508 culik
+2509 gaby
+2510 hammer
+2511 ikonis
+2512 ilya
+2513 intelijen
+2514 kecamuk
+2515 kesan
+2516 kuryakin
+2517 latar
+2518 mandat
+2519 medio
+2520 napoleon
+2521 nazi
+2522 rahasia
+2523 rangga
+2524 rapuh
+2525 rivalitas
+2526 sinopsis
+2527 solo
+2528 trans
+2529 uncle
+2530 youtube
+2531 aceh
+2532 agus
+2533 aisha
+2534 ajang
+2535 ario
+2536 aspirasi
+2537 bareng
+2538 bayu
+2539 dara
+2540 diesel
+2541 dinamika
+2542 duta
+2543 fast
+2544 festival
+2545 filmmaker
+2546 furious
+2547 garap
+2548 go
+2549 good
+2550 indigenous
+2551 kaget
+2552 katalis
+2553 katalisator
+2554 ketua
+2555 komite
+2556 latuconsina
+2557 layeu
+2558 minecraft
+2559 ngobrol
+2560 nikah
+2561 nonton
+2562 palangkaraya
+2563 personal
+2564 pinggir
+2565 premier
+2566 prilly
+2567 rangkai
+2568 resah
+2569 ringgo
+2570 riri
+2571 riza
+2572 sambang
+2573 sheila
+2574 sineas
+2575 storytelling
+2576 tampung
+2577 unjung
+2578 aktor
+2579 favorit
+2580 lesat
+2581 mangkuk
+2582 rahman
+2583 sinema
+2584 angkara
+2585 annoy
+2586 boleh
+2587 brother
+2588 bukit
+2589 cell
+2590 dosa
+2591 duri
+2592 evolusi
+2593 fenomenal
+2594 format
+2595 genre
+2596 gowok
+2597 home
+2598 illiyyin
+2599 indikator
+2600 jumbo
+2601 kakak
+2602 kepung
+2603 kian
+2604 kirim
+2605 kitab
+2606 komang
+2607 kosong
+2608 land
+2609 lebar
+2610 loan
+2611 miracle
+2612 murka
+2613 nominasi
+2614 oscar
+2615 pangku
+2616 panji
+2617 pecah
+2618 pelihara
+2619 pepes
+2620 ponakan
+2621 qodrat
+2622 rekognisi
+2623 seleksi
+2624 shadow
+2625 sijjin
+2626 singsot
+2627 siul
+2628 stray
+2629 sweet
+2630 tale
+2631 tengkorak
+2632 tilik
+2633 amal
+2634 anna
+2635 artikel
+2636 biar
+2637 camilla
+2638 charles
+2639 cium
+2640 clarence
+2641 cooper
+2642 daily
+2643 duke
+2644 eden
+2645 editor
+2646 eksklusif
+2647 elit
+2648 fashion
+2649 giat
+2650 guardian
+2651 harry
+2652 hina
+2653 house
+2654 jahat
+2655 kagum
+2656 konon
+2657 mail
+2658 markle
+2659 meghan
+2660 memoar
+2661 mendiang
+2662 obral
+2663 page
+2664 pangeran
+2665 paris
+2666 petinggi
+2667 pria
+2668 project
+2669 raja
+2670 rangka
+2671 ratu
+2672 ribut
+2673 richard
+2674 sensasional
+2675 siasat
+2676 sohor
+2677 spare
+2678 suami
+2679 sungkan
+2680 thaw
+2681 tiri
+2682 undang
+2683 utuh
+2684 vogue
+2685 week
+2686 wintour
+2687 yvette
+2688 adams
+2689 aktris
+2690 allen
+2691 amanda
+2692 annie
+2693 asli
+2694 austin
+2695 bafta
+2696 book
+2697 california
+2698 celaka
+2699 club
+2700 corleone
+2701 diane
+2702 gene
+2703 give
+2704 globe
+2705 godfather
+2706 gotta
+2707 hall
+2708 ikon
+2709 karier
+2710 keaton
+2711 kenny
+2712 kukuh
+2713 majalah
+2714 manhattan
+2715 manopo
+2716 marvin
+2717 meni
+2718 michael
+2719 murder
+2720 mystery
+2721 pacar
+2722 pacino
+2723 people
+2724 poms
+2725 reds
+2726 room
+2727 simmons
+2728 something
+2729 sutradara
+2730 wanita
+2731 woody
+2732 aline
+2733 anne
+2734 ashley
+2735 asisten
+2736 ball
+2737 baris
+2738 blunt
+2739 branagh
+2740 brosh
+2741 busana
+2742 century
+2743 chalamet
+2744 david
+2745 deux
+2746 devil
+2747 diva
+2748 dolce
+2749 eksekutif
+2750 emily
+2751 feldman
+2752 folie
+2753 frankel
+2754 gabbana
+2755 gaga
+2756 gejolak
+2757 hathaway
+2758 joker
+2759 karen
+2760 kenneth
+2761 lady
+2762 lucy
+2763 mayhem
+2764 mckenna
+2765 meryl
+2766 mewah
+2767 miranda
+2768 naskah
+2769 novak
+2770 pauline
+2771 plot
+2772 prada
+2773 priestly
+2774 produser
+2775 ramai
+2776 rosenfelt
+2777 sekuelnya
+2778 sibuk
+2779 simone
+2780 spoiler
+2781 stanley
+2782 streep
+2783 studios
+2784 superstar
+2785 syuting
+2786 theroux
+2787 thoms
+2788 tibor
+2789 tracie
+2790 tucci
+2791 variety
+2792 warlok
+2793 wear
+2794 anjing
+2795 another
+2796 antena
+2797 battle
+2798 becky
+2799 carolie
+2800 cedera
+2801 currey
+2802 dampar
+2803 death
+2804 drone
+2805 gardner
+2806 gayung
+2807 gelang
+2808 gooding
+2809 grace
+2810 gulat
+2811 gurun
+2812 hunter
+2813 jeffrey
+2814 kang
+2815 karat
+2816 long
+2817 mason
+2818 menara
+2819 mobil
+2820 morgan
+2821 nenek
+2822 nonaktif
+2823 panjat
+2824 parabola
+2825 pijak
+2826 pistol
+2827 ponselnya
+2828 ragu
+2829 ransel
+2830 review
+2831 sebentar
+2832 selingkuh
+2833 sepatu
+2834 setinggi
+2835 sinyal
+2836 solah
+2837 suar
+2838 tabur
+2839 tato
+2840 tebing
+2841 tewas
+2842 till
+2843 virginia
+2844 walk
+2845 adele
+2846 album
+2847 butter
+2848 cyrus
+2849 dongkrak
+2850 double
+2851 fate
+2852 flower
+2853 guling
+2854 hit
+2855 hitung
+2856 kantong
+2857 kaset
+2858 kopi
+2859 life
+2860 miley
+2861 murni
+2862 office
+2863 opalite
+2864 ophelia
+2865 polisi
+2866 raup
+2867 release
+2868 roket
+2869 santai
+2870 showgirl
+2871 spotify
+2872 swift
+2873 taylor
+2874 vinyl
+2875 bilang
+2876 dongak
+2877 eisendrath
+2878 ejae
+2879 fallon
+2880 flanel
+2881 fungsi
+2882 grunge
+2883 hantu
+2884 honmoon
+2885 ibunda
+2886 jangkung
+2887 jimmy
+2888 kenop
+2889 laki
+2890 mistis
+2891 mitos
+2892 nyanyi
+2893 paranormal
+2894 pintu
+2895 platinum
+2896 sekian
+2897 star
+2898 sully
+2899 takut
+2900 tamu
+2901 teknisi
+2902 tuai
+2903 volume
+2904 lantas
+2905 adriandhy
+2906 akar
+2907 angga
+2908 anyar
+2909 belarus
+2910 dongeng
+2911 dwimas
+2912 economic
+2913 ejek
+2914 jujur
+2915 kayak
+2916 kelana
+2917 kyrgyzstan
+2918 latin
+2919 makan
+2920 matang
+2921 meri
+2922 naratif
+2923 ngechat
+2924 nurman
+2925 peta
+2926 remeh
+2927 runway
+2928 ryan
+2929 sahabat
+2930 sasongko
+2931 semenjak
+2932 singapura
+2933 taiwan
+2934 tema
+2935 tualang
+2936 universal
+2937 untung
+2938 uzbekistan
+2939 visinema
+2940 akting
+2941 almond
+2942 bingung
+2943 cekam
+2944 damai
+2945 dengan
+2946 duck
+2947 ekspresif
+2948 fischer
+2949 frustrasi
+2950 gaib
+2951 gein
+2952 gonggong
+2953 horor
+2954 ideal
+2955 indy
+2956 intai
+2957 isyarat
+2958 jerit
+2959 karakteristik
+2960 kari
+2961 kasat
+2962 keliling
+2963 konsep
+2964 lembar
+2965 leonberg
+2966 makhluk
+2967 monster
+2968 nada
+2969 ngamuk
+2970 nova
+2971 poltergeist
+2972 rangkul
+2973 retriever
+2974 scotia
+2975 senang
+2976 spesifik
+2977 story
+2978 teka
+2979 teki
+2980 toll
+2981 toller
+2982 weekly
+2983 accident
+2984 asik
+2985 babat
+2986 benak
+2987 bong
+2988 brutal
+2989 bumbu
+2990 bummo
+2991 bungkus
+2992 byung
+2993 chan
+2994 chemistry
+2995 choi
+2996 chul
+2997 crime
+2998 duet
+2999 efisiensi
+3000 entah
+3001 epik
+3002 exorcist
+3003 feature
+3004 frame
+3005 gadai
+3006 ganjil
+3007 gila
+3008 golong
+3009 hanya
+3010 humor
+3011 insting
+3012 intens
+3013 jemu
+3014 joon
+3015 karyawan
+3016 ketidakpastian
+3017 komedi
+3018 konyol
+3019 korban
+3020 kyoung
+3021 landa
+3022 machiavellian
+3023 mckellar
+3024 mekanisasi
+3025 mendung
+3026 miri
+3027 moho
+3028 moral
+3029 novel
+3030 nurani
+3031 olah
+3032 otomatisasi
+3033 padu
+3034 parasite
+3035 park
+3036 partner
+3037 peka
+3038 pepet
+3039 potret
+3040 protagonis
+3041 psikologis
+3042 realitas
+3043 rimba
+3044 ringkas
+3045 sekal
+3046 seon
+3047 siber
+3048 singgung
+3049 slapstick
+3050 soon
+3051 sosio
+3052 teknik
+3053 tele
+3054 thriller
+3055 timpang
+3056 tragedi
+3057 trigger
+3058 westlake
+3059 wook
+3060 yeom
+3061 april
+3062 eras
+3063 fortnight
+3064 gapai
+3065 genap
+3066 teatrikal
+3067 tour
+3068 twitter
+3069 apotek
+3070 aritmia
+3071 asma
+3072 bloodfight
+3073 botol
+3074 chloe
+3075 cokelat
+3076 diabetes
+3077 hemokromatosis
+3078 inkubator
+3079 jantung
+3080 kamar
+3081 kiera
+3082 luang
+3083 lumpuh
+3084 napas
+3085 pasco
+3086 paulson
+3087 prematur
+3088 rakit
+3089 relaks
+3090 remaja
+3091 resep
+3092 ridocaine
+3093 sarah
+3094 sherman
+3095 sirkuit
+3096 suatu
+3097 washington
+3098 adventure
+3099 aliansi
+3100 anisa
+3101 ares
+3102 arya
+3103 bahagia
+3104 bouttier
+3105 canggih
+3106 chen
+3107 dewasa
+3108 dongji
+3109 ekspektasi
+3110 encom
+3111 enzy
+3112 fat
+3113 felicia
+3114 ganas
+3115 gawat
+3116 genting
+3117 gerbang
+3118 gerry
+3119 gigih
+3120 greta
+3121 hearts
+3122 interaksi
+3123 jebak
+3124 jourdy
+3125 lari
+3126 legacy
+3127 leto
+3128 marten
+3129 maxime
+3130 misteri
+3131 mutakhir
+3132 nelayan
+3133 niken
+3134 palka
+3135 pranata
+3136 rahmat
+3137 rampok
+3138 realita
+3139 rescue
+3140 romansa
+3141 setan
+3142 storia
+3143 tatap
+3144 tawan
+3145 tenggelam
+3146 teror
+3147 tron
+3148 zheyuan
+3149 zhoushan
+3150 comic
+3151 bass
+3152 coast
+3153 crawford
+3154 criss
+3155 dehidrasi
+3156 dolly
+3157 family
+3158 frehley
+3159 gaynor
+3160 george
+3161 gitaris
+3162 gloria
+3163 hambat
+3164 hard
+3165 highway
+3166 jaksa
+3167 jewel
+3168 kemudi
+3169 kennedy
+3170 kepada
+3171 kiss
+3172 koruptor
+3173 lajur
+3174 lidah
+3175 malibu
+3176 mirzani
+3177 ngalah
+3178 ngalahin
+3179 nikita
+3180 pacific
+3181 parton
+3182 paul
+3183 polis
+3184 pose
+3185 ring
+3186 rock
+3187 rutan
+3188 setir
+3189 shannon
+3190 stallone
+3191 strait
+3192 sylvester
+3193 tabrak
+3194 tuntut
+3195 tweed
+                </pre>
+            </div>
+        </section>
+
+        <section>
+            <h2>4. Filtering dan BoW Corpus</h2>
+            <pre>
+[ ]
+dictionary.filter_extremes(no_below=15, no_above=0.1, keep_n=100000)
+            </pre>
+            <pre>
+[ ]
+bow_corpus = [dictionary.doc2bow(doc) for doc in processed_docs]
+            </pre>
+        </section>
+
+        <section>
+            <h2>5. Frekuensi Kata BoW</h2>
+            <pre>
+[ ]
+# Buat kamus (dictionary) untuk menyimpan total hitungan kata
+total_word_counts = {}
+
+# Iterasi melalui setiap dokumen di bow_corpus
+for bow_doc in bow_corpus:
+    # Iterasi melalui setiap pasangan word_id dan count dalam dokumen
+    for word_id, count in bow_doc:
+        # Dapatkan kata asli dari dictionary
+        word = dictionary[word_id]
+        total_word_counts[word] = total_word_counts.get(word, 0) + count
+            </pre>
+            <div style="font-size: 0.98em;">
+                <strong>Total hitungan kata untuk semua dokumen:</strong>
+                <pre style="max-height: 180px; overflow-y: auto;">
+Kata 'iphone' muncul 603 kali.
+Kata 'hujan' muncul 333 kali.
+Kata 'musim' muncul 279 kali.
+Kata 'game' muncul 252 kali.
+Kata 'bmkg' muncul 252 kali.
+Kata 'program' muncul 245 kali.
+Kata 'prediksi' muncul 234 kali.
+Kata 'ponsel' muncul 225 kali.
+Kata 'jepang' muncul 221 kali.
+Kata 'saudi' muncul 216 kali.
+Kata 'nina' muncul 207 kali.
+Kata 'masyarakat' muncul 198 kali.
+Kata 'lagu' muncul 193 kali.
+Kata 'sehat' muncul 180 kali.
+Kata 'romeny' muncul 180 kali.
+Kata 'utara' muncul 171 kali.
+Kata 'laut' muncul 162 kali.
+Kata 'whatsapp' muncul 162 kali.
+Kata 'dijk' muncul 162 kali.
+Kata 'finlandia' muncul 162 kali.
+Kata 'kluivert' muncul 162 kali.
+Kata 'serta' muncul 160 kali.
+Kata 'manusia' muncul 158 kali.
+Kata 'layan' muncul 157 kali.
+Kata 'bumi' muncul 153 kali.
+Kata 'ekonomi' muncul 147 kali.
+Kata 'lahir' muncul 147 kali.
+Kata 'lokal' muncul 145 kali.
+Kata 'penalti' muncul 144 kali.
+Kata 'juang' muncul 142 kali.
+Kata 'november' muncul 140 kali.
+Kata 'pindah' muncul 138 kali.
+Kata 'ekspor' muncul 135 kali.
+Kata 'sesuai' muncul 135 kali.
+Kata 'sedia' muncul 135 kali.
+Kata 'varian' muncul 135 kali.
+Kata 'hijau' muncul 133 kali.
+Kata 'pulau' muncul 133 kali.
+Kata 'perangkat' muncul 133 kali.
+Kata 'kamera' muncul 133 kali.
+Kata 'jumbo' muncul 133 kali.
+Kata 'bioskop' muncul 129 kali.
+Kata 'stream' muncul 127 kali.
+Kata 'tanah' muncul 126 kali.
+Kata 'selebrasi' muncul 126 kali.
+Kata 'gempa' muncul 126 kali.
+Kata 'review' muncul 126 kali.
+Kata 'inggris' muncul 125 kali.
+Kata 'ribu' muncul 124 kali.
+Kata 'kpop' muncul 123 kali.
+Kata 'sejarah' muncul 122 kali.
+Kata 'tonton' muncul 122 kali.
+Kata 'alami' muncul 121 kali.
+Kata 'rata' muncul 117 kali.
+Kata 'sepak' muncul 117 kali.
+Kata 'klok' muncul 117 kali.
+Kata 'tsunami' muncul 117 kali.
+Kata 'jual' muncul 115 kali.
+Kata 'ekor' muncul 115 kali.
+Kata 'demon' muncul 115 kali.
+Kata 'hunters' muncul 115 kali.
+Kata 'kait' muncul 114 kali.
+Kata 'rekam' muncul 114 kali.
+Kata 'yakin' muncul 112 kali.
+Kata 'sepeda' muncul 108 kali.
+Kata 'spesial' muncul 108 kali.
+Kata 'store' muncul 108 kali.
+Kata 'tarif' muncul 108 kali.
+Kata 'trump' muncul 108 kali.
+Kata 'depay' muncul 108 kali.
+Kata 'selalu' muncul 108 kali.
+Kata 'gede' muncul 106 kali.
+Kata 'malaysia' muncul 106 kali.
+Kata 'muka' muncul 106 kali.
+Kata 'timur' muncul 105 kali.
+Kata 'lengkap' muncul 104 kali.
+Kata 'keluarga' muncul 104 kali.
+Kata 'mata' muncul 104 kali.
+Kata 'kondisi' muncul 104 kali.
+Kata 'gelap' muncul 104 kali.
+Kata 'layar' muncul 100 kali.
+Kata 'animasi' muncul 100 kali.
+Kata 'tumbuh' muncul 99 kali.
+Kata 'fase' muncul 99 kali.
+Kata 'final' muncul 99 kali.
+Kata 'halaman' muncul 99 kali.
+Kata 'daya' muncul 98 kali.
+Kata 'jawa' muncul 97 kali.
+Kata 'ulang' muncul 97 kali.
+Kata 'generasi' muncul 97 kali.
+Kata 'mati' muncul 96 kali.
+Kata 'januari' muncul 95 kali.
+Kata 'obat' muncul 92 kali.
+Kata 'maaf' muncul 91 kali.
+Kata 'bijak' muncul 90 kali.
+Kata 'akses' muncul 90 kali.
+Kata 'pihak' muncul 90 kali.
+Kata 'tenaga' muncul 90 kali.
+Kata 'jangan' muncul 90 kali.
+Kata 'jarang' muncul 90 kali.
+Kata 'ridho' muncul 90 kali.
+Kata 'ronde' muncul 90 kali.
+Kata 'skuad' muncul 90 kali.
+Kata 'finis' muncul 90 kali.
+Kata 'model' muncul 90 kali.
+Kata 'tujuh' muncul 89 kali.
+Kata 'juni' muncul 89 kali.
+Kata 'menteri' muncul 88 kali.
+Kata 'nomor' muncul 88 kali.
+Kata 'unit' muncul 88 kali.
+Kata 'khas' muncul 88 kali.
+Kata 'bahan' muncul 88 kali.
+Kata 'picu' muncul 88 kali.
+Kata 'angka' muncul 87 kali.
+Kata 'alas' muncul 86 kali.
+Kata 'tampak' muncul 86 kali.
+Kata 'choice' muncul 86 kali.
+Kata 'berita' muncul 86 kali.
+Kata 'habis' muncul 86 kali.
+Kata 'arah' muncul 86 kali.
+Kata 'gemar' muncul 86 kali.
+Kata 'sulit' muncul 85 kali.
+Kata 'rangga' muncul 85 kali.
+Kata 'youtube' muncul 85 kali.
+Kata 'negeri' muncul 84 kali.
+Kata 'alam' muncul 84 kali.
+Kata 'masing' muncul 84 kali.
+Kata 'lapor' muncul 84 kali.
+Kata 'festival' muncul 84 kali.
+Kata 'anjing' muncul 84 kali.
+Kata 'amerika' muncul 83 kali.
+Kata 'maju' muncul 83 kali.
+Kata 'umum' muncul 82 kali.
+Kata 'tahap' muncul 82 kali.
+Kata 'tuan' muncul 82 kali.
+Kata 'jawab' muncul 82 kali.
+Kata 'budaya' muncul 82 kali.
+Kata 'uang' muncul 81 kali.
+Kata 'wujud' muncul 81 kali.
+Kata 'yassierli' muncul 81 kali.
+Kata 'merek' muncul 81 kali.
+Kata 'logam' muncul 81 kali.
+Kata 'terang' muncul 81 kali.
+Kata 'australia' muncul 81 kali.
+Kata 'fitur' muncul 81 kali.
+Kata 'kontroversial' muncul 81 kali.
+Kata 'filipina' muncul 81 kali.
+Kata 'amat' muncul 81 kali.
+Kata 'curah' muncul 81 kali.
+Kata 'wakil' muncul 80 kali.
+Kata 'tanya' muncul 80 kali.
+Kata 'luas' muncul 79 kali.
+Kata 'pusat' muncul 79 kali.
+Kata 'ketat' muncul 79 kali.
+Kata 'hubung' muncul 79 kali.
+Kata 'naik' muncul 79 kali.
+Kata 'kira' muncul 79 kali.
+Kata 'tolak' muncul 79 kali.
+Kata 'karakter' muncul 79 kali.
+Kata 'golden' muncul 79 kali.
+Kata 'sinopsis' muncul 79 kali.
+Kata 'kolaborasi' muncul 78 kali.
+Kata 'korea' muncul 78 kali.
+Kata 'judul' muncul 78 kali.
+Kata 'acara' muncul 78 kali.
+Kata 'ganti' muncul 77 kali.
+Kata 'enam' muncul 77 kali.
+Kata 'raya' muncul 77 kali.
+Kata 'sing' muncul 77 kali.
+Kata 'keluar' muncul 77 kali.
+Kata 'selesai' muncul 77 kali.
+Kata 'musik' muncul 77 kali.
+Kata 'tanda' muncul 77 kali.
+Kata 'ario' muncul 77 kali.
+Kata 'sheila' muncul 77 kali.
+Kata 'sisi' muncul 75 kali.
+Kata 'digital' muncul 75 kali.
+Kata 'turun' muncul 74 kali.
+Kata 'saksi' muncul 73 kali.
+Kata 'pekan' muncul 73 kali.
+Kata 'jangka' muncul 72 kali.
+Kata 'miliar' muncul 72 kali.
+Kata 'wajib' muncul 72 kali.
+Kata 'angkat' muncul 72 kali.
+Kata 'barat' muncul 72 kali.
+Kata 'klaim' muncul 72 kali.
+Kata 'jamin' muncul 72 kali.
+Kata 'total' muncul 72 kali.
+Kata 'tangan' muncul 72 kali.
+Kata 'virgil' muncul 72 kali.
+Kata 'malen' muncul 72 kali.
+Kata 'doha' muncul 72 kali.
+Kata 'cklamovski' muncul 72 kali.
+Kata 'matahari' muncul 72 kali.
+Kata 'sadar' muncul 72 kali.
+Kata 'fokus' muncul 71 kali.
+Kata 'semangat' muncul 70 kali.
+Kata 'kapan' muncul 70 kali.
+Kata 'unduh' muncul 70 kali.
+Kata 'tunggu' muncul 70 kali.
+Kata 'upaya' muncul 70 kali.
+Kata 'buruk' muncul 70 kali.
+Kata 'eropa' muncul 70 kali.
+Kata 'dominasi' muncul 70 kali.
+Kata 'mantan' muncul 70 kali.
+Kata 'dingin' muncul 70 kali.
+Kata 'good' muncul 70 kali.
+Kata 'oscar' muncul 70 kali.
+Kata 'apresiasi' muncul 69 kali.
+Kata 'henti' muncul 69 kali.
+Kata 'kalau' muncul 69 kali.
+Kata 'pulang' muncul 68 kali.
+Kata 'lintas' muncul 68 kali.
+Kata 'bakal' muncul 68 kali.
+Kata 'ganggu' muncul 68 kali.
+Kata 'bahaya' muncul 68 kali.
+Kata 'serikat' muncul 67 kali.
+Kata 'rusia' muncul 67 kali.
+Kata 'label' muncul 67 kali.
+Kata 'masalah' muncul 66 kali.
+Kata 'pasang' muncul 66 kali.
+Kata 'memang' muncul 66 kali.
+Kata 'sambung' muncul 66 kali.
+Kata 'sentuh' muncul 66 kali.
+Kata 'siapa' muncul 66 kali.
+Kata 'jatuh' muncul 66 kali.
+Kata 'trans' muncul 66 kali.
+Kata 'istri' muncul 65 kali.
+Kata 'sumber' muncul 64 kali.
+Kata 'rekomendasi' muncul 64 kali.
+Kata 'cari' muncul 64 kali.
+Kata 'kecil' muncul 64 kali.
+Kata 'iring' muncul 64 kali.
+Kata 'sekali' muncul 64 kali.
+Kata 'debut' muncul 64 kali.
+Kata 'situasi' muncul 64 kali.
+Kata 'terap' muncul 63 kali.
+Kata 'bangsa' muncul 63 kali.
+Kata 'bekal' muncul 63 kali.
+Kata 'ekosistem' muncul 63 kali.
+Kata 'kemnaker' muncul 63 kali.
+Kata 'semata' muncul 63 kali.
+Kata 'misal' muncul 63 kali.
+Kata 'borong' muncul 63 kali.
+Kata 'segar' muncul 63 kali.
+Kata 'cuci' muncul 63 kali.
+Kata 'operasi' muncul 63 kali.
+Kata 'status' muncul 63 kali.
+Kata 'jaga' muncul 63 kali.
+Kata 'pasuk' muncul 63 kali.
+Kata 'tanggung' muncul 63 kali.
+Kata 'syarat' muncul 63 kali.
+Kata 'chat' muncul 63 kali.
+Kata 'internet' muncul 63 kali.
+Kata 'asnawi' muncul 63 kali.
+Kata 'rizky' muncul 63 kali.
+Kata 'selasa' muncul 63 kali.
+Kata 'kecewa' muncul 63 kali.
+Kata 'pelupessy' muncul 63 kali.
+Kata 'tipis' muncul 63 kali.
+Kata 'fenomena' muncul 63 kali.
+Kata 'akibat' muncul 63 kali.
+Kata 'iklim' muncul 63 kali.
+Kata 'series' muncul 63 kali.
+Kata 'bayu' muncul 63 kali.
+Kata 'identitas' muncul 62 kali.
+Kata 'aktif' muncul 61 kali.
+Kata 'elektronik' muncul 61 kali.
+Kata 'play' muncul 61 kali.
+Kata 'berkat' muncul 61 kali.
+Kata 'mesin' muncul 61 kali.
+Kata 'cuma' muncul 61 kali.
+Kata 'dana' muncul 61 kali.
+Kata 'ilmuwan' muncul 61 kali.
+Kata 'dulu' muncul 61 kali.
+Kata 'kerap' muncul 61 kali.
+Kata 'percaya' muncul 61 kali.
+Kata 'panggung' muncul 61 kali.
+Kata 'dramatis' muncul 61 kali.
+Kata 'sana' muncul 60 kali.
+Kata 'laksana' muncul 59 kali.
+Kata 'setia' muncul 59 kali.
+Kata 'agam' muncul 59 kali.
+Kata 'proyek' muncul 59 kali.
+Kata 'prancis' muncul 59 kali.
+Kata 'lokasi' muncul 59 kali.
+Kata 'bayi' muncul 59 kali.
+Kata 'bahas' muncul 58 kali.
+Kata 'chri' muncul 58 kali.
+Kata 'sakit' muncul 57 kali.
+Kata 'penuh' muncul 57 kali.
+Kata 'sore' muncul 57 kali.
+Kata 'singkir' muncul 57 kali.
+Kata 'hilang' muncul 57 kali.
+Kata 'pelihara' muncul 56 kali.
+Kata 'kang' muncul 56 kali.
+Kata 'ajak' muncul 55 kali.
+Kata 'saing' muncul 55 kali.
+Kata 'platform' muncul 55 kali.
+Kata 'perang' muncul 55 kali.
+Kata 'presiden' muncul 54 kali.
+Kata 'ketenagakerjaan' muncul 54 kali.
+Kata 'struktur' muncul 54 kali.
+Kata 'tangguh' muncul 54 kali.
+Kata 'google' muncul 54 kali.
+Kata 'murah' muncul 54 kali.
+Kata 'arti' muncul 54 kali.
+Kata 'potong' muncul 54 kali.
+Kata 'listrik' muncul 54 kali.
+Kata 'rute' muncul 54 kali.
+Kata 'tata' muncul 54 kali.
+Kata 'saat' muncul 54 kali.
+Kata 'lansir' muncul 54 kali.
+Kata 'dagu' muncul 54 kali.
+Kata 'justru' muncul 54 kali.
+Kata 'surat' muncul 54 kali.
+Kata 'kotak' muncul 54 kali.
+Kata 'memphis' muncul 54 kali.
+Kata 'pojok' muncul 54 kali.
+Kata 'susun' muncul 54 kali.
+Kata 'belakang' muncul 54 kali.
+Kata 'fifa' muncul 54 kali.
+Kata 'patrick' muncul 54 kali.
+Kata 'rekan' muncul 54 kali.
+Kata 'sayap' muncul 54 kali.
+Kata 'sayur' muncul 54 kali.
+Kata 'yakob' muncul 54 kali.
+Kata 'takluk' muncul 54 kali.
+Kata 'joey' muncul 54 kali.
+Kata 'gelandang' muncul 54 kali.
+Kata 'kuning' muncul 54 kali.
+Kata 'maarten' muncul 54 kali.
+Kata 'paes' muncul 54 kali.
+Kata 'garis' muncul 54 kali.
+Kata 'hakim' muncul 54 kali.
+Kata 'salam' muncul 54 kali.
+Kata 'malah' muncul 54 kali.
+Kata 'cahaya' muncul 54 kali.
+Kata 'langit' muncul 54 kali.
+Kata 'sulawesi' muncul 54 kali.
+Kata 'kreator' muncul 54 kali.
+Kata 'perlu' muncul 53 kali.
+Kata 'karya' muncul 53 kali.
+Kata 'kaya' muncul 53 kali.
+Kata 'gera' muncul 53 kali.
+Kata 'soundtrack' muncul 53 kali.
+Kata 'barang' muncul 52 kali.
+Kata 'kota' muncul 52 kali.
+Kata 'lupa' muncul 52 kali.
+Kata 'libat' muncul 52 kali.
+Kata 'kisah' muncul 52 kali.
+Kata 'kurang' muncul 52 kali.
+Kata 'kalian' muncul 52 kali.
+Kata 'bangkit' muncul 52 kali.
+Kata 'anggap' muncul 52 kali.
+Kata 'biru' muncul 52 kali.
+Kata 'pecat' muncul 52 kali.
+Kata 'tercopy' muncul 52 kali.
+Kata 'vietnam' muncul 52 kali.
+Kata 'asing' muncul 52 kali.
+Kata 'sebab' muncul 52 kali.
+Kata 'kreatif' muncul 52 kali.
+Kata 'simpan' muncul 52 kali.
+Kata 'tembus' muncul 51 kali.
+Kata 'rencana' muncul 51 kali.
+Kata 'citra' muncul 51 kali.
+Kata 'perhati' muncul 51 kali.
+Kata 'laris' muncul 51 kali.
+Kata 'kapal' muncul 50 kali.
+Kata 'bebas' muncul 50 kali.
+Kata 'kritik' muncul 50 kali.
+Kata 'mode' muncul 50 kali.
+Kata 'terlalu' muncul 50 kali.
+Kata 'aksi' muncul 50 kali.
+Kata 'pendek' muncul 50 kali.
+Kata 'foto' muncul 50 kali.
+Kata 'komentar' muncul 50 kali.
+Kata 'adegan' muncul 50 kali.
+Kata 'ayah' muncul 50 kali.
+Kata 'jar' muncul 49 kali.
+Kata 'ajang' muncul 49 kali.
+Kata 'duta' muncu
+                </pre>
+            </div>
+        </section>
+
+        <section>
+            <h2>Lihat Notebook Interaktif Lengkap & Download</h2>
+            <p>
+                Untuk eksplorasi kode lengkap, visualisasi interaktif, dan seluruh langkah LDA.ipynb dengan GENSIM (Python), silakan buka link berikut:<br>
+                <a class="focus-link" href="https://colab.research.google.com/drive/1FFb9-ym3gblY8La5COCECwaEWF2KdVcY?usp=sharing" target="_blank">
+                    <b>LDA.ipynb Google Colab - YOEL 23-046</b>
+                </a>
+                <br><br>
+                <b>Segala step, output dan script kode sudah dimasukkan dan tidak ada yang dikurangi sesuai permintaan.</b>
+            </p>
+        </section>
+        <hr>
+        <div style="text-align:center;color:#999;">&copy; 2024 YOEL (23-046) • Dataset: CNN Indonesia • Tugas LDA Gensim • <a href="https://colab.research.google.com/drive/1FFb9-ym3gblY8La5COCECwaEWF2KdVcY?usp=sharing" style="color:#777" target="_blank">[Unduh Notebook]</a></div>
+    </div>
+</body>
+</html>
